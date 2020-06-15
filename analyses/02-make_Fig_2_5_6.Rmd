@@ -131,8 +131,8 @@ plot_rt %>%
   mutate(facets = factor(Fit_method, levels = c('BR','Cori','WT_symptom_onset','WT'), labels = c('Bettencourt & Ribeiro', 'Cori et al.', 'Wallinga & Teunis', 'Wallinga & Teunis'))) %>%
   ggplot() +
   geom_line(aes(x = time, y = true_rt), lwd = 1)+
-  geom_line(aes(x = time, y = mean, color = Fit_method)) +
-  geom_line(aes(x = time, y = R_case), color = 'gray') +
+  geom_line(aes(x = time, y = R_case), lty = 2) +
+  geom_line(aes(x = time, y = mean, color = Fit_method), alpha = .7) +
   geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = Fit_method), alpha = 0.3)+
   xlab('time') +
   ylab(expression(paste(R[t]))) +
@@ -150,7 +150,7 @@ plot_rt %>%
 plot_rt %>%
   ggplot()+
   geom_line(aes(x = time, y = incidence))+
-  geom_line(aes(x = time, y = obs_cases), lty = 2)+
+  geom_line(aes(x = time, y = obs_cases), color = 'gray')+
   ylab(NULL)+
   theme_classic()
 gg_png(1.6, 1.5, 'figs/Fig2_inset.png')

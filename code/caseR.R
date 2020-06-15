@@ -80,7 +80,7 @@ integrate_Rt <- function(beta_t,  ## Function that returns beta (t) for any time
   if(any(is.na(beta_t(0:T_inf)))){stop('beta_t must return values from 0:(T+100). Either decrease T or increase the range of beta_t.')}
   
   ode_output <- as.data.frame(
-    integrate_seir(beta_t, sigma, gamma, N, T_inf, E0, 0)
+    integrate_seir(beta_t, sigma, gamma, N, T_inf, E0, I0)
   )
   SoverN <- approxfun(ode_output$time, ode_output$S / N)
   
