@@ -1,0 +1,374 @@
+---
+title: "Analyze synthetic data and generate plots"
+output: html_notebook
+---
+
+## This script makes the following figures:
+
+* Fig. 1 (Compare 3 methods under ideal conditions)
+* Fig. 4 (Effect of window size)
+* Fig. 5 (Effect of mean serial interval)
+
+```{r}
+## Preamble
+rm(list = ls())
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(cowplot)
+library(EpiEstim)
+theme_set(theme_bw())
+knitr::opts_chunk$set(message = FALSE)
+parlist <- read_rds('true_pars.rds')
+source('../code/util.R')
+if(!dir.exists('figs')){dir.create('figs')}
+```
+
+## Extract SEIR simulation and plot.
+
+- Incidence here is observed at time of infection (S -> E).
+- SEIR simulation is deterministic
+
+```{r}
+get_sim_df() %>%
+    filter(time < 300) %>%
+ggplot() +
+  geom_line(aes(x = time, y = incidence))+
+  geom_vline(aes(xintercept = parlist$intervention_time_1), lty = 2)+ ## Dahsed line where Rt starts to decrease
+    geom_vline(aes(xintercept = parlist$intervention_time_2), lty = 2)+ ## Dahsed line where Rt starts to decrease
+  ggtitle('Epidemic curve') -> inc
+
+get_sim_df() %>% 
+  filter(time < 300) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt)) +
+  geom_hline(aes(yintercept = 1), lty = 2)+
+  ylab(expression(paste(R[t])))+
+  ggtitle(expression(paste('Underlying ', R[t], ' values'))) -> R0
+
+plot_grid(R0, inc, align = 'hv', nrow = 2)
+ggsave('figs/SEIR_sim.png', width = 5, height = 5, units = 'in', dpi = 300)
+```
+
+
+# Fig. 2 - estimate Rt in real time using three different methods, assuming perfect observation at the moment of infection.
+
+## Truncate the synthetic data to a maximum time of observation
+
+```{r}
+mt <- 150
+rtdf <- get_sim_df() %>% filter(time <= mt)
+```
+
+
+## Use the method of Cori et al. and of Wallinga & Teunis from EpiEstim to estimate Rt.
+```{r}
+wdw <- 1 ## Set smoothing window = 1d
+reset = FALSE ## If FALSE, read in cached file
+
+if(!file.exists('cori_wt_fits_rt.rds')|reset){ ## If generating new estimates...
+  plot_df_rt <- rtdf %>%
+    merge(get_cori(rtdf, icol_name = 'incidence', window = wdw), by = 'time') %>%     ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rtdf, icol_name = 'incidence', window = wdw), by = 'time') %>%      ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+    merge(get_WT(rtdf, icol_name = 'obs_cases', outcol_name = 'WT_symptom_onset', window = wdw), by = 'time') %>%      ## Estimate using WT at E->I transition
+    select(time, true_rt, incidence, obs_cases, contains('Cori'), contains('WT')) 
+  
+  write_rds(plot_df_rt, path = 'cori_wt_fits_rt.rds')
+}else{ ## If reading saved file...
+  plot_df_rt <- readRDS('cori_wt_fits_rt.rds')
+}
+```
+
+## Get B & R fits, estimated using a model implemented in rstan.
+
+```{r message = FALSE}
+## wrapper function get_BR is defined in `util.R`.
+## stan model is defined in rtlive.stan, and wrappers are defined in rtlive.R
+BR_rt <- get_BR(rtdf, 'BR_real_time.rds', parlist, reset = FALSE)
+
+## Merge with WT and Cori estimates from above
+plot_rt <- merge(
+  plot_df_rt,
+  parse_fits(BR_rt, max.time = mt),
+  by = 'time', all = TRUE
+) %>%
+  pivot_longer(contains('.'), names_to = c("Fit_method", '.value'), names_sep = '\\.') ## Reformat for plotting
+```
+
+## Get the case reproductive number
+```{r}
+# reset = FALSE
+# if(!file.exists('Rc.rds')|reset == TRUE){
+# source('../code/simulation.R')
+# Rc <- get_Rc_ode(arnaught = get_sim_df()$true_r0, 
+#                  t_E = parlist$t_E, 
+#                  t_I = parlist$t_I, 
+#                  N = parlist$N, 
+#                  E_init = parlist$E_init, 
+#                  I_init = parlist$I_init, 
+#                  n_t = parlist$n_t)
+# write_rds(Rc, path = 'Rc.rds')
+# }else{
+#   Rc <- readRDS('Rc.rds')
+# }
+
+source('../code/caseR.R')
+beta_t <- with(get_sim_df(),
+               approxfun(x = time, y = true_r0/parlist$t_I))
+# # Test
+# ttt <- runif(n = 301, 0, 300)
+# get_sim_df() %>%
+#   ggplot()+
+#   geom_line(aes(x = time, y = true_r0/parlist$t_I))+
+#   geom_point(aes(x = ttt, y = beta_t(ttt)), color = 'red')
+
+Rt_output <- with(parlist,
+                  integrate_Rt(beta_t, 
+                          sigma = 1/t_E, 
+                          gamma = 1/t_I, 
+                          N = N, 
+                          T = mt, 
+                          E0 = E_init, 
+                          I0 = I_init, 
+                          dt_int = .001)
+) 
+```
+
+```{r}
+## Add to plotting data frame.
+plot_rt <- merge(Rt_output, plot_rt, by = 'time', all.y = TRUE)
+```
+
+
+## Plot Figure 2
+```{r}
+ymin = 0; ymax =2.5 ## Set y limits (truncate CIs if they exceed these limits)
+plot_rt %>%
+  filter(!is.na(mean) & time < 250) %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`),
+         `025` = ifelse(`025`<ymin, ymin, `025`)) %>%
+  mutate(facets = factor(Fit_method, levels = c('BR','Cori','WT_symptom_onset','WT'), labels = c('Bettencourt & Ribeiro', 'Cori et al.', 'Wallinga & Teunis', 'Wallinga & Teunis'))) %>%
+  ggplot() +
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_line(aes(x = time, y = mean, color = Fit_method)) +
+  geom_line(aes(x = time, y = R_case), color = 'gray') +
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = Fit_method), alpha = 0.3)+
+  #geom_line(data = Rc, aes(x = time, y = R_case), color = 'gray')+
+  xlab('time') +
+  ylab(expression(paste(R[t]))) +
+  xlab('Time')+
+  ylim(c(ymin, ymax))+
+  facet_wrap(.~facets) +
+  xlim(c(0, mt))+
+  theme(legend.position = 'none')+
+  labs(fill = 'Estimation method', color = "Estimation method")
+  gg_png(ww=6, hh=2.5, 'figs/Figure2.png')
+```
+
+## Make inset of time series
+```{r}
+plot_rt %>%
+  ggplot()+
+  geom_line(aes(x = time, y = incidence))+
+  geom_line(aes(x = time, y = obs_cases), lty = 2)+
+  ylab(NULL)+
+  theme_classic()
+gg_png(1.6, 1.5, 'figs/Fig2_inset.png')
+```
+
+# Make panels of Fig. 5
+
+## Fig. 5A
+## Use method of Cori et al. Compare smoothing windows. Assign R_t to end of window.
+
+```{r}
+cori_wrapper_wdw <- function(ww){
+  get_cori(get_sim_df('stochastic') %>% filter(time < 150), 
+           icol_name = 'incidence',
+           out_name = sprintf('wdw_%.1f', ww),
+           window = ww, 
+           SI_mean = parlist$true_mean_SI)
+}
+
+wdw_df <- get_sim_df() %>%
+  ## Merge with true SI fit
+  merge(cori_wrapper_wdw(1) , by = 'time') %>%
+ # merge(cori_wrapper_wdw(3), by = 'time') %>%
+  merge(cori_wrapper_wdw(7), by = 'time') %>%
+  merge(cori_wrapper_wdw(14), by = 'time')# %>%
+  #merge(cori_wrapper_wdw(21), by = 'time') 
+
+```
+
+
+
+```{r}
+ymax = 3
+wdw_df %>%
+  pivot_longer(contains('.'), names_to = c('window', '.value'), names_pattern = 'wdw_(\\d\\d?\\.\\d)\\.(\\w+)') %>%
+  mutate(window = as.numeric(window),
+         w_lab = sprintf('window = %.0f d', window)) %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
+  filter(time < 150) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = as.factor(window)), alpha = .3) +
+  geom_line(aes(x = time, y = mean, color = as.factor(window)), alpha = .7)+
+  ylab(expression(paste(R[t])))+
+  xlab('Time')+
+  theme(legend.position = c(.75, .7))+
+  labs(color = 'Window size (d)', fill = 'Window size (d)')
+gg_png(4, 3.5, 'figs/Fig5A_window_tend.png')
+```
+
+
+## Make Fig. 4B
+## Cori: compare smoothing windows, assing R_t to middle of window
+
+```{r}
+## Wraper to get cori estimates for a given window size, ww
+cori_wrapper_wdw_mid <- function(ww){
+  get_cori(get_sim_df(method = 'stochastic') %>% filter(time < 150), 
+           icol_name = 'incidence', ## Which column to use as input data
+           out_name = sprintf('wdw_%.1f', ww), ## Name of output column will be "wdw_SIZE"
+           window = ww,
+           SI_mean = parlist$true_mean_SI, 
+           wend = FALSE) ## Assign to midpoint, not end of window
+}
+
+wdw_df_mid <- get_sim_df(method = 'stochastic') %>%
+  ## Merge with true SI fit
+  merge(cori_wrapper_wdw_mid(1) , by = 'time') %>%
+  #merge(cori_wrapper_wdw_mid(3), by = 'time') %>%
+  merge(cori_wrapper_wdw_mid(7), by = 'time') %>%
+  merge(cori_wrapper_wdw_mid(14), by = 'time') #%>%
+  #merge(cori_wrapper_wdw_mid(21), by = 'time') 
+
+```
+
+
+
+```{r}
+ymax = 3
+wdw_df_mid %>%
+  pivot_longer(contains('.'), names_to = c('window', '.value'), names_pattern = 'wdw_(\\d\\d?\\.\\d)\\.(\\w+)') %>%
+  mutate(window = as.numeric(window),
+         w_lab = sprintf('window = %.0f d', window)) %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
+  filter(time < 150) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = as.factor(window)), alpha = .3) +
+  geom_line(aes(x = time, y = mean, color = as.factor(window)), alpha = .7)+
+  ylab(expression(paste(R[t]))) +
+  xlab('Time')+
+  theme(legend.position = c(.75, .7))+
+  labs(color = 'Window size (d)', fill = 'Window size (d)')
+gg_png(4, 3.5, 'figs/Fig5B_window_tmid.png')
+```
+
+## Plot time series inset
+```{r}
+get_sim_df('stochastic') %>% filter(time < 150) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = incidence))+
+  ylab('new infections')+
+  theme_classic()
+gg_png(2.1,2, 'figs/Fig5_inset.png')
+```
+
+
+# Fig. 6
+
+## Cori: compare serial intervals
+
+
+```{r}
+wdw <- 1 ## Set smoothing window = 1d
+cori_wrapper_SI <- function(SI_offset){
+  SI <- parlist$true_mean_SI+SI_offset
+  get_cori(get_sim_df(), icol_name = 'incidence', out_name = sprintf('SI_%.1f', SI), window = wdw, SI_mean = SI)
+}
+
+SI_df <- get_sim_df('stochastic') %>%
+  ## Merge with true SI fit
+  merge( cori_wrapper_SI(0) , by = 'time') %>%
+  merge(cori_wrapper_SI(-2), by = 'time') %>%
+  merge(cori_wrapper_SI(-1), by = 'time') %>%
+  merge(cori_wrapper_SI(1), by = 'time') %>%
+  merge(cori_wrapper_SI(2), by = 'time') 
+
+```
+
+```{r}
+ymax = 3
+SI_df %>%
+  pivot_longer(contains('.'), names_to = c('SI', '.value'), names_pattern = 'SI_(\\d\\d?\\.\\d)\\.(\\w+)') %>%
+  mutate(SI = as.numeric(SI)) %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
+  filter(time < 150) %>%
+  mutate(SI = ifelse(SI == 8, '8 (true value)', SI)) %>%
+  mutate(SI = factor(SI, levels = c('6', '7', '8 (true value)', '9', '10'))) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_line(aes(x = time, y = mean, color = SI))+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill =SI), alpha = .1) +
+  ylab(expression(paste(R[t])))+
+  labs(color = 'Generation interval\nmean (d)', fill = 'Generation interval\nmean (d)') +
+  theme(legend.position = c(.75, .7))
+gg_png(4, 3.5, 'figs/Fig6_gen_interval.png')
+```
+
+
+
+## Compare smoothed WT and Cori
+
+```{r}
+reset = TRUE ## If FALSE, read in cached file
+
+if(!file.exists('smoothed.rds')|reset){ ## If generating new estimates...
+  plot_smoothed <- rtdf %>%
+    merge(get_cori(rtdf, icol_name = 'incidence', out_name = 'Cori_3', window = 3, wend = FALSE), by = 'time') %>%    ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rtdf, icol_name = 'incidence', outcol_name = 'WT_3', window = 3, wend = FALSE), by = 'time') %>%      ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+    merge(get_cori(rtdf, icol_name = 'incidence', out_name = 'Cori_7', window = 7, wend = FALSE), by = 'time') %>%     ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rtdf, icol_name = 'incidence', outcol_name = 'WT_7', window = 7, wend = FALSE), by = 'time') %>%      ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+    select(time, true_rt, incidence, contains('Cori'), contains('WT')) 
+  
+  write_rds(plot_smoothed, path = 'smoothed.rds')
+}else{ ## If reading saved file...
+  plot_smoothed <- readRDS('smoothed.rds')
+}
+```
+
+
+
+```{r}
+plot_smoothed %>%
+  pivot_longer(-c(1:3), names_to = c('method', '.value'), names_sep = '\\.') %>%
+  separate(method, into = c('method', 'window'), sep = '_') %>%
+  filter(window == '7') %>%
+  ggplot(aes(x = time)) +
+  geom_line(aes(y = mean, color = method))+
+    geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = method), alpha = .5) +
+  #geom_line(aes(y = true_rt))+
+  #facet_wrap(.~window)+
+  ylim(c(.5, 2.5))+
+  ylab(expression(paste(R[t])))
+gg_png(ww = 5.5, hh = 4, 'figs/Fig_compare_smooth.png')
+```
+
+
+
+
+```{r}
+plot_smoothed %>%
+  pivot_longer(-c(1:3), names_to = c('method', '.value'), names_sep = '\\.') %>%
+  separate(method, into = c('method', 'window'), sep = '_') %>%
+  mutate(stime = ifelse(method == 'Cori', time, time +8)) %>%
+  ggplot(aes(x = stime)) +
+  geom_line(aes(y = mean, color = method))+
+  #geom_line(aes(y = true_rt))+
+  facet_wrap(.~window)+
+  ylim(c(.5, 2.5))
+```

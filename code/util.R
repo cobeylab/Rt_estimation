@@ -120,10 +120,10 @@ load_sims_for_one_R0 <-  function(arnaught, model_type = 'seir', method = 'stoch
 
 
 ## Write a function to extract the simulation results as a data frame
-get_sim_df <- function(){
+get_sim_df <- function(method = 'ode'){  ## can also be 'stochastic'
   readRDS(sprintf('R0-%.1f/seir_%s_dec%.0f-%.0f_sim.rds', 
                   parlist$pre_intervention_R0, 
-                  parlist$methods,
+                  method,
                   parlist$intervention_time_1, 
                   parlist$days_intervention_to_min))$sim_df %>%
     mutate_all(.funs = function(xx){ifelse(is.na(xx), 0, xx)}) %>%
@@ -150,16 +150,19 @@ na_to_0 <- function(vec){
 ## Output cori estimate with mean, CI and times given an input df, and the name of the incidence column
 get_WT <- function(df.in, 
                    icol_name, 
+                   outcol_name = 'WT',
                    window = 1, 
                    SI_mean=parlist$true_mean_SI, 
-                   SI_var=2*(parlist$true_mean_SI/2)^2){
+                   SI_var=2*(parlist$true_mean_SI/2)^2,
+                   wend = FALSE){
   idat <- df.in %>%
     filter(get(icol_name) > 0 & !is.na(get(icol_name))) %>%
     complete(time = 2:max(time))%>%
-    mutate_all(.funs = function(xx){ifelse(is.na(xx), 0, xx)})
+    mutate_all(.funs = function(xx){ifelse(is.na(xx), 0, xx)}) %>%
+    arrange(time)
   
   ts <- idat$time
-  ts <- ts[ts > 1 & ts < (max(ts)-window+1)]
+  ts <- ts[ts > 1 & ts <= (max(ts)-window+1)]
   te<- ts+(window-1)
   
   wallinga_teunis(
@@ -170,17 +173,24 @@ get_WT <- function(df.in,
       std_si = sqrt(SI_var),
       t_start=ts,
       t_end=te,
-      n_sim=50
+      n_sim=100
     )
   ) -> outs
   
   outs$R %>%
-    select(t_end, `Mean(R)`, `Quantile.0.025(R)`, `Quantile.0.975(R)`) %>%
-    setNames(c('time', paste0('WT', '.mean'), paste0('WT', '.025'), paste0('WT', '.975')))
+    mutate(time = if(wend == TRUE) t_end else ceiling((t_end+t_start)/2) ) %>%
+    select(time, `Mean(R)`, `Quantile.0.025(R)`, `Quantile.0.975(R)`) %>%
+    setNames(c('time', paste0(outcol_name, '.mean'), paste0(outcol_name, '.025'), paste0(outcol_name, '.975')))
 }
 
 
 
+# df.in = rtdf
+# icol_name = 'incidence'
+# out_name = 'Cori'
+# window = 1
+# SI_mean = 8
+# SI_var = 2*(parlist$true_mean_SI/2)^2
 ## Output cori estimate with mean, CI and times given an input df, and the name of the incidence column
 get_cori <- function(df.in, 
                      icol_name, 
@@ -189,14 +199,21 @@ get_cori <- function(df.in,
                      SI_mean=parlist$true_mean_SI, 
                      SI_var=2*(parlist$true_mean_SI/2)^2,
                      wend = TRUE){
+  
+  df.in[icol_name] <- na_to_0(df.in[icol_name]) ## Replace NAs in incidence
+  
+  
   idat <- df.in %>%
-    filter(get(icol_name) > 0 & !is.na(get(icol_name))) %>%
-    complete(time = 2:max(time))%>%
-    mutate_all(.funs = function(xx){ifelse(is.na(xx), 0, xx)})
+    #filter(get(icol_name) > 0 & !is.na(get(icol_name))) %>%
+    complete(time = 2:max(df.in$time)) %>%
+    mutate_all(.funs = function(xx){ifelse(is.na(xx), 0, xx)}) %>%
+    arrange(time)
+  
+
   
   ts <- idat$time
-  ts <- ts[ts > 1 & ts < (max(ts)-window+1)]
-  te<- ts+(window-1)
+  ts <- ts[ts > 1 & ts <= (max(ts)-window+1)]
+  te <- ts+(window-1)
   
   estimate_R(
     incid = pull(idat, eval(icol_name)),
@@ -304,3 +321,30 @@ gg_png <- function(ww, ## width (in)
                    pp = last_plot()){ ## name of plot to save. default is the last plot in the working device
   ggsave(filename = fn, width =  ww, height = hh, plot = pp, units = 'in', dpi = 300, device = png())
 }
+
+
+
+
+
+# ## Get the first time at which cumulative case count is >12, or start at time 2 if cumulative incidence is immediately >12
+# st.time <- max(
+#   3,
+#   df.in %>% 
+#     mutate(cs = cumsum(get(icol_name))) %>%
+#     filter(cs > 12) %>%
+#     slice(1) %>%
+#     pull(time) 
+#   )
+# 
+# ## Get the last time at which incidence is >0 
+# ed.time <- min(
+#   max(df.in$time),
+#   df.in %>%
+#     filter(get(icol_name)==0 & time >= st.time) %>%
+#     slice(1) %>%
+#     pull(time)
+#   
+# )
+# 
+# idat <- df.in %>%
+#   filter(time >= st.time & time <= ed.time)

@@ -17,16 +17,20 @@ sim_sweep <- function(PARAMS){
     dir.create(dirname)
   }
   setwd(dirname)
- # saveRDS(PARAMS, paste0('PARAMS_df.Rds'))
+  # saveRDS(PARAMS, paste0('PARAMS_df.Rds'))
   for(intervention_time_1 in PARAMS$intervention_time_1){
     for(decrease_duration in PARAMS$days_intervention_to_min){
       for(intervention_time_2 in PARAMS$intervention_time_2){
         for(increase_duration in PARAMS$days_to_Rt_rise){
           ## Specify time-varying R0
-          arnaught <- specify_arnaught(R0_vec = c(PARAMS$pre_intervention_R0, PARAMS$intervention_R0, PARAMS$partially_lifeted_R0), 
-                                       change_start_vec = c(intervention_time_1, intervention_time_2), 
-                                       change_end_vec =  c(intervention_time_1+decrease_duration,intervention_time_2+increase_duration), 
-                                       NT = PARAMS$n_t)
+          if(PARAMS$pre_intervention_R0 == PARAMS$intervention_R0 & PARAMS$intervention_R0 == PARAMS$partially_lifeted_R0){
+            arnaught <- rep(PARAMS$pre_intervention_R0, PARAMS$n_t+1)
+          }else{
+            arnaught <- specify_arnaught(R0_vec = c(PARAMS$pre_intervention_R0, PARAMS$intervention_R0, PARAMS$partially_lifeted_R0), 
+                                         change_start_vec = c(intervention_time_1, intervention_time_2), 
+                                         change_end_vec =  c(intervention_time_1+decrease_duration,intervention_time_2+increase_duration), 
+                                         NT = PARAMS$n_t)
+          }
           do_one_arnaught(arnaught, intervention_time_1, decrease_duration, PARAMS)
         }
       }
@@ -237,7 +241,7 @@ simulate_seir_example <- function(
     S_init = N - E_init - I_init,
     E_init = E_init,
     I_init = I_init,
-    n_t = n_t, n_steps_per_t = n_steps_per_t,
+    n_t = n_t, n_steps_per_t = 1,
     method = method
   )
 }
@@ -260,10 +264,10 @@ load_sims_for_one_R0 <-  function(arnaught, model_type = 'seir', method = 'stoch
 
 
 ## Write a function to extract the simulation results as a data frame
-get_sim_df <- function(){
+get_sim_df <- function(method = 'ode'){ # can also input 'sotchastic'
   readRDS(sprintf('R0-%.1f/seir_%s_dec%.0f-%.0f_sim.rds', 
                   parlist$pre_intervention_R0, 
-                  parlist$methods,
+                  method,
                   parlist$intervention_time_1, 
                   parlist$days_intervention_to_min))$sim_df %>%
     mutate_all(.funs = function(xx){ifelse(is.na(xx), 0, xx)}) %>%

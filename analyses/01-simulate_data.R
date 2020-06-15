@@ -1,5 +1,9 @@
 ## Simulate synthetic data
 rm(list = ls())
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
 
 
 ## Set parameters to simulate SEIR epidemic
@@ -19,7 +23,7 @@ parlist <- {
     days_intervention_to_min = c(7), # Days from intervention start until transmission rate hits min_R0
     days_to_Rt_rise = 7,
     model_types = c('seir'), # Can also choose sir
-    methods = c('ode') # could also choose ode
+    methods = c('ode', 'stochastic') # could also choose ode
   )
 }
 
