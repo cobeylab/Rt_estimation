@@ -5,9 +5,9 @@ output: html_notebook
 
 ## This script makes the following figures:
 
-* Fig. 1 (Compare 3 methods under ideal conditions)
-* Fig. 4 (Effect of window size)
-* Fig. 5 (Effect of mean serial interval)
+* Fig. 2 (Compare 3 methods under ideal conditions)
+* Fig. 5 (Effect of window size)
+* Fig. 6 (Effect of mean serial interval)
 
 ```{r}
 ## Preamble
@@ -96,32 +96,11 @@ plot_rt <- merge(
   pivot_longer(contains('.'), names_to = c("Fit_method", '.value'), names_sep = '\\.') ## Reformat for plotting
 ```
 
-## Get the case reproductive number
+## Calculate the case reproductive number
 ```{r}
-# reset = FALSE
-# if(!file.exists('Rc.rds')|reset == TRUE){
-# source('../code/simulation.R')
-# Rc <- get_Rc_ode(arnaught = get_sim_df()$true_r0, 
-#                  t_E = parlist$t_E, 
-#                  t_I = parlist$t_I, 
-#                  N = parlist$N, 
-#                  E_init = parlist$E_init, 
-#                  I_init = parlist$I_init, 
-#                  n_t = parlist$n_t)
-# write_rds(Rc, path = 'Rc.rds')
-# }else{
-#   Rc <- readRDS('Rc.rds')
-# }
-
 source('../code/caseR.R')
 beta_t <- with(get_sim_df(),
                approxfun(x = time, y = true_r0/parlist$t_I))
-# # Test
-# ttt <- runif(n = 301, 0, 300)
-# get_sim_df() %>%
-#   ggplot()+
-#   geom_line(aes(x = time, y = true_r0/parlist$t_I))+
-#   geom_point(aes(x = ttt, y = beta_t(ttt)), color = 'red')
 
 Rt_output <- with(parlist,
                   integrate_Rt(beta_t, 
@@ -135,6 +114,7 @@ Rt_output <- with(parlist,
 ) 
 ```
 
+Merge Rc with the data frame for plotting
 ```{r}
 ## Add to plotting data frame.
 plot_rt <- merge(Rt_output, plot_rt, by = 'time', all.y = TRUE)
@@ -154,7 +134,6 @@ plot_rt %>%
   geom_line(aes(x = time, y = mean, color = Fit_method)) +
   geom_line(aes(x = time, y = R_case), color = 'gray') +
   geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = Fit_method), alpha = 0.3)+
-  #geom_line(data = Rc, aes(x = time, y = R_case), color = 'gray')+
   xlab('time') +
   ylab(expression(paste(R[t]))) +
   xlab('Time')+
