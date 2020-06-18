@@ -8,6 +8,7 @@ output: html_notebook
 * Fig. 2 (Compare 3 methods under ideal conditions)
 * Fig. 5 (Effect of window size)
 * Fig. 6 (Effect of mean serial interval)
+* Fig. B.3 (Compare smoothed Cori and WT)
 
 ```{r}
 ## Preamble
@@ -301,9 +302,11 @@ gg_png(4, 3.5, 'figs/Fig6_gen_interval.png')
 
 
 
-## Compare smoothed WT and Cori
+# Fig. B.3 - Compare smoothed WT and Cori
 
+## Generate fits
 ```{r}
+
 reset = TRUE ## If FALSE, read in cached file
 
 if(!file.exists('smoothed.rds')|reset){ ## If generating new estimates...
@@ -321,6 +324,7 @@ if(!file.exists('smoothed.rds')|reset){ ## If generating new estimates...
 ```
 
 
+## Plot
 
 ```{r}
 plot_smoothed %>%
@@ -339,17 +343,3 @@ plot_smoothed %>%
 gg_png(ww = 5.5, hh = 4, 'figs/Fig_compare_smooth.png')
 ```
 
-
-
-
-```{r}
-plot_smoothed %>%
-  pivot_longer(-c(1:3), names_to = c('method', '.value'), names_sep = '\\.') %>%
-  separate(method, into = c('method', 'window'), sep = '_') %>%
-  mutate(stime = ifelse(method == 'Cori', time, time +8)) %>%
-  ggplot(aes(x = stime)) +
-  geom_line(aes(y = mean, color = method))+
-  #geom_line(aes(y = true_rt))+
-  facet_wrap(.~window)+
-  ylim(c(.5, 2.5))
-```
