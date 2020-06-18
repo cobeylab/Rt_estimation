@@ -4,11 +4,8 @@ output: html_notebook
 author: Ed Baskerville
 ---
 
-```{r}
-library(deSolve)
-library(ggplot2)
-library(dplyr)
-```
+**Key references -  [Wallinga and Lipsitch, 2007](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1766383/pdf/rspb20063754.pdf).**
+
 
 Let $R(t)$ be the average number of infections caused by a person exposed at time $t$.
 It is the average, over each future time, of the number of infections that would be caused by the person infected at that time, weighted by the probability that they are infectious at time $\tau$.
@@ -52,7 +49,7 @@ g(v) &= \gamma e^{-\gamma v}
 \end{align}
 $$
 
-for inverse mean latent period $\sigma$ and inverse mean infectious period $\gamma$, and integrate analytically, you get (or, rather, I get; hopefully it's right):
+for inverse mean latent period $\sigma$ and inverse mean infectious period $\gamma$, and integrate analytically:
 
 $$
 \begin{align}
