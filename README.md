@@ -4,7 +4,7 @@ Practical considerations for detectingchanges in the effective reproductive numb
 
 Code by Katie Gostic, Ed Baskerville and Lauren McGough. 
 
-Last updated 3-June-2020. 
+Last updated 18-June-2020. 
 
 ## [Code](https://github.com/cobeylab/Rt_estimation/tree/master/code)
 This directory contains functions and wrappers used to perform analyses:
