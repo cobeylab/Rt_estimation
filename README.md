@@ -6,6 +6,11 @@ Code by Katie Gostic, Ed Baskerville and Lauren McGough.
 
 Last updated 18-June-2020. 
 
+## [Read the manuscript](https://github.com/cobeylab/Rt_estimation/blob/master/manuscript_18June2020.pdf)
+Click the above link to read the latest version of the manuscript. Contact kgostic@uchicago.edu with comments.
+
+We will post the medRxiv doi once it becomes available.
+
 ## [Code](https://github.com/cobeylab/Rt_estimation/tree/master/code)
 This directory contains functions and wrappers used to perform analyses:
 
