@@ -23,7 +23,8 @@ This directory contains scripts and notebooks used to run analyses and generate 
 ### Workflow:
 
 * `01-simulate_data.R` - Specify inputs, generate synthetic data and save to a directory called `R0-xx/`.
-* `02-Analyze_synthetic_data.Rmd` - Annotated code performs the analyses and makes all plots shown in Fig. 1, 4 and 5. 
-* `03-Make_Fig_3.Rmd` - Annotated code performs the analyses and makes all plots shown in Fig. 3.
-* `04-make_FigS1_deconvolution.Rmd` - Annotated code performs the analyses and makes the plots shown in Fig. S1, a tutorial on why deconvolution methods are needed.
+* `02-Analyze_synthetic_data.Rmd` - Annotated code performs the analyses and makes all plots shown in Fig. 2, 5 and 6, and appendix Fig. B.3. 
+* `02-make_Fig_2_appendix.Rmd` - Code performs analyses and generates Fig. B2, an alternate version of Fig. 2 in the main text, which compares the performance of Cori, Wallinga and Teunis, and Bettencourt and Ribeiro when the time series is truncated as Rt rises or falls.
+* `03-Make_Fig_4.Rmd` - Annotated code performs the analyses and makes all plots shown in Fig. 4.
+* `04-Make_Fig_deconvolution.Rmd` - Annotated code performs the analyses and makes the plot shown in the appendix, a tutorial on why deconvolution methods are needed.
 
