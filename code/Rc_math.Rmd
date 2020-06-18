@@ -1,0 +1,67 @@
+---
+title: "Exact Rt from differential equations"
+output: html_notebook
+author: Ed Baskerville
+---
+
+```{r}
+library(deSolve)
+library(ggplot2)
+library(dplyr)
+```
+
+Let $R(t)$ be the average number of infections caused by a person exposed at time $t$.
+It is the average, over each future time, of the number of infections that would be caused by the person infected at that time, weighted by the probability that they are infectious at time $\tau$.
+
+
+$$
+\begin{align}
+\mathcal{R}(t) &= \int_{t}^{\infty}
+    \beta(u) p(u - t)  \frac{S(u)}{N}
+\, du
+\end{align}
+$$
+
+where $p(\cdot)$ is the probability over time that a person is infectious after being exposed.
+This probability must take into account the latent non-infectious period as well as the infectious period:
+
+$$
+\begin{align}
+    p(s) &= \int_{0}^{s} h(u) \left[1 - \int_0^{s-u} g(v) \, dv \right] \, du
+\end{align}
+$$
+
+where $h(\cdot)$ is the probability density of the waiting time of the latent period, and $g(\cdot)$ is the probability density of the waiting time of the infectious period.
+
+
+For exponential distributions, this seems to work out analytically...
+
+If you use
+
+$$
+\begin{align}
+h(u) &= \sigma e^{- \sigma u}
+\end{align}
+$$
+
+and use
+
+$$
+\begin{align}
+g(v) &= \gamma e^{-\gamma v}
+\end{align}
+$$
+
+for inverse mean latent period $\sigma$ and inverse mean infectious period $\gamma$, and integrate analytically, you get (or, rather, I get; hopefully it's right):
+
+$$
+\begin{align}
+p(s) &= \frac{
+  \sigma \left[
+    e^{-\sigma s} - e^{-\gamma s}
+  \right]
+}{
+  \gamma - \sigma
+}
+\end{align}
+$$

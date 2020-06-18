@@ -1,9 +1,16 @@
 ## Functions to calculate exact Rt
+## Code by Ed Baskerville
+## June 13, 2020
 
+## For an explanation of the calculations shown here, see Rc_math.Rmd
 library(deSolve)
 
-## Function to compute p
-make_p_infectious <- function(sigma, gamma) {
+
+
+## Function to compute p(u) the probability that an individual is infectious u days after the moment of infection.
+make_p_infectious <- function(sigma, ## rate of leaving compartment E
+                              gamma  ## rate of leaving compartment I
+                              ) {
   if(sigma == gamma) {
     function(s) {
       gamma * s * exp(-gamma * s)
