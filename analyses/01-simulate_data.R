@@ -29,7 +29,7 @@ parlist <- {
 
 ## Derive the mean and variance of the serial interval from the input parameters
 parlist$true_mean_SI = (parlist$t_E+parlist$t_I)
-parlist$true_var_SI = 2*parlist$true_mean_SI^2
+parlist$true_var_SI = 2*(parlist$true_mean_SI/2)^2
 
 
 
