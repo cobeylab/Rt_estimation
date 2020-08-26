@@ -3,7 +3,7 @@
 
 ## For generating synthetic data ----------------------------------------
 
-## Output underlying R0 values for input into the SIR or SEIR model across once change (increase or decrease)
+## Output underlying R0 values for input into the GIR or SEIR model across once change (increase or decrease)
 get_arnaught_step <- function(start_R0, 
                                   final_R0, 
                                   start_change,  ## Time at which R0 first departs from its initial value, start_R0
@@ -152,8 +152,8 @@ get_WT <- function(df.in,
                    icol_name, 
                    outcol_name = 'WT',
                    window = 1, 
-                   SI_mean=parlist$true_mean_SI, 
-                   SI_var=2*(parlist$true_mean_SI/2)^2,
+                   GI_mean=parlist$true_mean_GI, 
+                   GI_var=2*(parlist$true_mean_GI/2)^2,
                    wend = FALSE){
   idat <- df.in %>%
     filter(get(icol_name) > 0 & !is.na(get(icol_name))) %>%
@@ -169,8 +169,8 @@ get_WT <- function(df.in,
     incid = pull(idat, eval(icol_name)),
     method = "parametric_si",
     config = list(
-      mean_si = SI_mean,
-      std_si = sqrt(SI_var),
+      mean_si = GI_mean,
+      std_si = sqrt(GI_var),
       t_start=ts,
       t_end=te,
       n_sim=100
@@ -189,15 +189,15 @@ get_WT <- function(df.in,
 # icol_name = 'incidence'
 # out_name = 'Cori'
 # window = 1
-# SI_mean = 8
-# SI_var = 2*(parlist$true_mean_SI/2)^2
+# GI_mean = 8
+# GI_var = 2*(parlist$true_mean_GI/2)^2
 ## Output cori estimate with mean, CI and times given an input df, and the name of the incidence column
 get_cori <- function(df.in, 
                      icol_name, 
                      out_name = 'Cori',
                      window = 1, 
-                     SI_mean=parlist$true_mean_SI, 
-                     SI_var=2*(parlist$true_mean_SI/2)^2,
+                     GI_mean=parlist$true_mean_GI, 
+                     GI_var=2*(parlist$true_mean_GI/2)^2,
                      wend = TRUE){
   
   df.in[icol_name] <- na_to_0(df.in[icol_name]) ## Replace NAs in incidence
@@ -220,14 +220,14 @@ get_cori <- function(df.in,
     method = "uncertain_si",
     config = make_config(
       list(
-        mean_si = SI_mean,
-        min_mean_si = SI_mean -1,
-        max_mean_si = SI_mean + 1,
+        mean_si = GI_mean,
+        min_mean_si = GI_mean -1,
+        max_mean_si = GI_mean + 1,
         std_mean_si = 1.5,
         std_std_si = 1.5,
-        std_si = sqrt(SI_var),
-        min_std_si = sqrt(SI_var)*.8,
-        max_std_si = sqrt(SI_var)*1.2,
+        std_si = sqrt(GI_var),
+        min_std_si = sqrt(GI_var)*.8,
+        max_std_si = sqrt(GI_var)*1.2,
         n1 = 50,
         n2 = 100, 
         t_start=ts,
@@ -281,7 +281,7 @@ get_BR <- function(df.in, filename, parlist, reset){
   theta_init_sd <- 0.1
   step_size_prior_sd <- 0.03
   
-  ## These are the paramters for SI ~ gamma(2, 1/4)
+  ## These are the paramters for GI ~ gamma(2, 1/4)
   get_shape_rate <- function(mean, vv){
     rate = mean/vv
     shape = mean*rate
@@ -290,8 +290,8 @@ get_BR <- function(df.in, filename, parlist, reset){
     c(shape, rate)
   }
   ### Here, the si variance is the variance OF THE MEAN, so assume it's low.
-  si_shape <- get_shape_rate(parlist$true_mean_SI, .5)[1]
-  si_rate <- get_shape_rate(parlist$true_mean_SI, .5)[2]
+  si_shape <- get_shape_rate(parlist$true_mean_GI, .5)[1]
+  si_rate <- get_shape_rate(parlist$true_mean_GI, .5)[2]
   
   
   ## Estimate Rt using Rstan

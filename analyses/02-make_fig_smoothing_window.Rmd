@@ -1,0 +1,121 @@
+---
+title: "Show effect of smoothing window"
+output: html_notebook
+---
+
+
+```{r}
+## Preamble
+rm(list = ls())
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(cowplot)
+library(EpiEstim)
+theme_set(theme_bw())
+knitr::opts_chunk$set(message = FALSE)
+parlist <- read_rds('true_pars.rds')
+source('../code/util.R')
+if(!dir.exists('figs')){dir.create('figs')}
+```
+
+
+## Make panel A
+## Use method of Cori et al. Compare smoothing windows. Assign R_t to end of window.
+
+```{r}
+cori_wrapper_wdw <- function(ww){
+  get_cori(get_sim_df('stochastic') %>% filter(time < 150), 
+           icol_name = 'incidence',
+           out_name = sprintf('wdw_%.1f', ww),
+           window = ww, 
+           GI_mean = parlist$true_mean_GI)
+}
+
+
+## Merge raw data with Rt estimates for various window sizes
+wdw_df <- get_sim_df('stochastic') %>% filter(time < 150) %>%
+  merge(cori_wrapper_wdw(1) , by = 'time') %>%
+  merge(cori_wrapper_wdw(7), by = 'time') %>%
+  merge(cori_wrapper_wdw(14), by = 'time')
+
+```
+
+
+
+```{r}
+ymax = 3
+wdw_df %>%
+  pivot_longer(contains('.'), names_to = c('window', '.value'), names_pattern = 'wdw_(\\d\\d?\\.\\d)\\.(\\w+)') %>%
+  mutate(window = as.numeric(window),
+         w_lab = sprintf('window = %.0f d', window)) %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
+  filter(time < 150) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = as.factor(window)), alpha = .3) +
+  geom_line(aes(x = time, y = mean, color = as.factor(window)), alpha = .7)+
+  ylab(expression(paste(R[t])))+
+  xlab('Time')+
+  theme(legend.position = c(.75, .7))+
+  labs(color = 'Window size (d)', fill = 'Window size (d)')
+#gg_png(4, 3.5, 'figs/window_tend.png')
+```
+
+
+## Make panel B
+## Cori: compare smoothing windows, assing R_t to middle of window
+
+```{r}
+## Wraper to get cori estimates for a given window size, ww
+cori_wrapper_wdw_mid <- function(ww){
+  get_cori(get_sim_df(method = 'stochastic') %>% filter(time < 150), 
+           icol_name = 'incidence', ## Which column to use as input data
+           out_name = sprintf('wdw_%.1f', ww), ## Name of output column will be "wdw_GIZE"
+           window = ww,
+           GI_mean = parlist$true_mean_GI, 
+           wend = FALSE) ## Assign to midpoint, not end of window
+}
+
+wdw_df_mid <- get_sim_df('stochastic') %>% filter(time < 150) %>%
+  ## Merge with true GI fit
+  merge(cori_wrapper_wdw_mid(1) , by = 'time') %>%
+  #merge(cori_wrapper_wdw_mid(3), by = 'time') %>%
+  merge(cori_wrapper_wdw_mid(7), by = 'time') %>%
+  merge(cori_wrapper_wdw_mid(14), by = 'time') #%>%
+  #merge(cori_wrapper_wdw_mid(21), by = 'time') 
+
+```
+
+
+
+```{r}
+ymax = 3
+wdw_df_mid %>%
+  pivot_longer(contains('.'), names_to = c('window', '.value'), names_pattern = 'wdw_(\\d\\d?\\.\\d)\\.(\\w+)') %>%
+  mutate(window = as.numeric(window),
+         w_lab = sprintf('window = %.0f d', window)) %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
+  filter(time < 150) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = as.factor(window)), alpha = .3) +
+  geom_line(aes(x = time, y = mean, color = as.factor(window)), alpha = .7)+
+  ylab(expression(paste(R[t]))) +
+  xlab('Time')+
+  theme(legend.position = c(.75, .7))+
+  labs(color = 'Window size (d)', fill = 'Window size (d)')
+gg_png(4, 3.5, 'figs/window_tmid.png')
+```
+
+## Plot time series inset
+```{r}
+get_sim_df('stochastic') %>% filter(time < 150) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = incidence))+
+  ylab('new infections')+
+  theme_classic()
+gg_png(2.1,2, 'figs/window_inset.png')
+```
+

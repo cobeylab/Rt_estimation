@@ -1,0 +1,135 @@
+---
+title: "Compare Cori et al., Wallinga & Teunis and Bettencourt & Ribeiro methods"
+output: html_notebook
+---
+
+
+```{r}
+## Preamble
+rm(list = ls())
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(cowplot)
+library(EpiEstim)
+theme_set(theme_bw())
+knitr::opts_chunk$set(message = FALSE)
+parlist <- read_rds('true_pars.rds')
+source('../code/util.R')
+if(!dir.exists('figs')){dir.create('figs')}
+```
+
+## Truncate the synthetic data to a maximum time of observation
+
+```{r}
+mt <- 150
+rtdf <- get_sim_df() %>% filter(time <= mt)
+```
+
+# Supplementary figure - Compare smoothed WT and Cori
+
+## Generate fits
+```{r}
+
+reset = FALSE ## If FALSE, read in cached file
+
+if(!file.exists('smoothed.rds')|reset){ ## If generating new estimates...
+  plot_smoothed <- rtdf %>%
+    merge(get_cori(rtdf, icol_name = 'incidence', out_name = 'Cori_1', window = 1, wend = FALSE), by = 'time') %>%    ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rtdf, icol_name = 'incidence', outcol_name = 'WT_1', window = 1, wend = FALSE), by = 'time') %>%      ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+    merge(get_cori(rtdf, icol_name = 'incidence', out_name = 'Cori_7', window = 7, wend = FALSE), by = 'time') %>%     ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rtdf, icol_name = 'incidence', outcol_name = 'WT_7', window = 7, wend = FALSE), by = 'time') %>%      ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+    select(time, true_rt, incidence, contains('Cori'), contains('WT')) 
+  
+  write_rds(plot_smoothed, path = 'smoothed.rds')
+}else{ ## If reading saved file...
+  plot_smoothed <- readRDS('smoothed.rds')
+}
+```
+
+
+## Load main text fits and calculate true R_case
+```{r}
+plot_rt <- readRDS('cori_wt_fits_rt.rds') ##  Load saved fits from main text figure
+## Calculate the case reproductive number
+source('../code/caseR.R')
+beta_t <- with(get_sim_df(),
+               approxfun(x = time, y = true_r0/parlist$t_I))
+
+Rt_output <- with(parlist,
+                  integrate_Rt(beta_t, 
+                          sigma = 1/t_E, 
+                          gamma = 1/t_I, 
+                          N = N, 
+                          T = mt, 
+                          E0 = E_init, 
+                          I0 = I_init, 
+                          dt_int = .001)
+) 
+```
+
+Merge Rc with the data frame for plotting
+```{r}
+## Add to plotting data frame.
+plot_rt <- merge(Rt_output, plot_rt, by = 'time', all.y = TRUE)
+```
+
+## Plot
+
+```{r}
+plot_smoothed %>%
+  pivot_longer(-c(1:3), names_to = c('method', '.value'), names_sep = '\\.') %>%
+  separate(method, into = c('method', 'window'), sep = '_') %>%
+  filter(window == '7') %>%
+  merge(plot_rt %>% select(time, R_case), all.x = TRUE, all.y = FALSE) %>%
+  ggplot(aes(x = time)) +
+  geom_line(aes(y = mean, color = method))+
+    geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = method), alpha = .5) +
+  geom_line(aes(y = true_rt), lty = 3)+
+  geom_line(aes(y = R_case), lty = 2)+
+  #facet_wrap(.~window)+
+  ylim(c(.5, 2.5))+
+  ylab(expression(paste(R[t])))
+gg_png(ww = 5.5, hh = 4, 'figs/Fig_compare_smooth.png')
+```
+
+## Plot exact only
+
+```{r}
+plot_smoothed %>%
+  pivot_longer(-c(1:3), names_to = c('method', '.value'), names_sep = '\\.') %>%
+  separate(method, into = c('method', 'window'), sep = '_') %>%
+  filter(window == '7') %>%
+  merge(plot_rt %>% select(time, R_case), all.x = TRUE, all.y = FALSE) %>%
+  ggplot(aes(x = time)) +
+  #geom_line(aes(y = mean, color = method))+
+  #  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = method), alpha = .5) +
+  geom_line(aes(y = true_rt), lty = 1)+
+  geom_line(aes(y = R_case), lty = 2)+
+  geom_vline(aes(xintercept = parlist$intervention_time_1), color = 'darkred')+
+  geom_vline(aes(xintercept = parlist$intervention_time_2), color = 'darkred')+
+  #facet_wrap(.~window)+
+  ylim(c(.5, 2.5))+
+  ylab(expression(paste(R[t])))
+gg_png(ww = 5.5, hh = 4, 'figs/Fig_exact_rt_rc.png')
+```
+
+
+```{r}
+plot_smoothed %>%
+  pivot_longer(-c(1:3), names_to = c('method', '.value'), names_sep = '\\.') %>%
+  separate(method, into = c('method', 'window'), sep = '_') %>%
+  filter(window == '7') %>%
+  merge(plot_rt %>% select(time, R_case), all.x = TRUE, all.y = FALSE) %>%
+  ggplot(aes(x = time)) +
+  geom_line(aes(y = mean, color = method), show.legend = F)+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = method), alpha = .5, show.legend = F) +
+  geom_line(aes(y = true_rt), lty = 3)+
+  geom_line(aes(y = R_case), lty = 2)+
+  #facet_wrap(.~window)+
+  ylim(c(.5, 2.5))+
+  ylab(expression(paste(R[t])))
+gg_png(ww = 5.5, hh = 4, 'figs/Fig_exact_rt_rc_color.png')
+```
+
