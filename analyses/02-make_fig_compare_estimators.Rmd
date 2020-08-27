@@ -60,7 +60,7 @@ rtdf <- get_sim_df() %>% filter(time <= mt)
 ## Use the method of Cori et al. and of Wallinga & Teunis from EpiEstim to estimate Rt.
 ```{r}
 wdw <- 1 ## Set smoothing window = 1d
-reset = FALSE ## If FALSE, read in cached file
+reset = TRUE ## If FALSE, read in cached file
 
 if(!file.exists('cori_wt_fits_rt.rds')|reset){ ## If generating new estimates...
   plot_df_rt <- rtdf %>%
@@ -80,7 +80,7 @@ if(!file.exists('cori_wt_fits_rt.rds')|reset){ ## If generating new estimates...
 ```{r message = FALSE}
 ## wrapper function get_BR is defined in `util.R`.
 ## stan model is defined in rtlive.stan, and wrappers are defined in rtlive.R
-BR_rt <- get_BR(rtdf, 'BR_real_time.rds', parlist, reset = FALSE)
+BR_rt <- get_BR(rtdf, 'BR_real_time.rds', parlist, reset = TRUE)
 
 ## Merge with WT and Cori estimates from above
 plot_rt <- merge(

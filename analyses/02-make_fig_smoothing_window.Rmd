@@ -60,7 +60,7 @@ wdw_df %>%
   xlab('Time')+
   theme(legend.position = c(.75, .7))+
   labs(color = 'Window size (d)', fill = 'Window size (d)')
-#gg_png(4, 3.5, 'figs/window_tend.png')
+gg_png(4, 3.5, 'figs/window_tend.png')
 ```
 
 
@@ -81,11 +81,8 @@ cori_wrapper_wdw_mid <- function(ww){
 wdw_df_mid <- get_sim_df('stochastic') %>% filter(time < 150) %>%
   ## Merge with true GI fit
   merge(cori_wrapper_wdw_mid(1) , by = 'time') %>%
-  #merge(cori_wrapper_wdw_mid(3), by = 'time') %>%
   merge(cori_wrapper_wdw_mid(7), by = 'time') %>%
-  merge(cori_wrapper_wdw_mid(14), by = 'time') #%>%
-  #merge(cori_wrapper_wdw_mid(21), by = 'time') 
-
+  merge(cori_wrapper_wdw_mid(14), by = 'time') 
 ```
 
 

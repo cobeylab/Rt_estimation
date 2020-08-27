@@ -228,7 +228,8 @@ Rt_to_T %>%
   pivot_longer(cols = contains('.'), names_to = c('strategy', '.value'), names_sep = '\\.') %>%
   mutate(strategy = factor(strategy, levels = c('incidence', 'shift_case', 'shift_death'))) %>%
   group_by(strategy) %>%
-  mutate(maxT = max(time[mean > 0 & !is.na(mean)]),
+  mutate(flag = ifelse(mean>0 & !is.na(mean) & is.finite(mean), TRUE, FALSE),
+         maxT = max(time[flag]),
          laglab = sprintf('%.0fd gap', ceiling(as.numeric(max(time)-maxT)))) %>%
   mutate(`025` = ifelse(`025`>ymax, ymax, `025`),
          `975` = ifelse(`975`>ymax, ymax, `975`)) %>%
@@ -259,7 +260,7 @@ cowplot::plot_grid(
           legend.position = 'bottom')
 )
 )
-ggsave('figs/fig3_legend.png', width = 7, height = 1.5)
+ggsave('figs/backcalc_legend.png', width = 7, height = 1.5)
 
 ggsave(plot = cases, 
        sprintf('figs/cases.png'), 
@@ -276,7 +277,8 @@ ggsave(plot = deaths,
        dpi = 300)
 
 
-ggsave('figs/Rt_ests.png', 
+ggsave(plot = a, 
+       'figs/Rt_ests.png', 
        width = 7, 
        height = 4.5, 
        units = 'in', 

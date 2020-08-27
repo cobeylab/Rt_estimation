@@ -200,15 +200,16 @@ get_cori <- function(df.in,
                      GI_var=2*(parlist$true_mean_GI/2)^2,
                      wend = TRUE){
   
-  df.in[icol_name] <- na_to_0(df.in[icol_name]) ## Replace NAs in incidence
+  max.obs.time <- df.in %>% filter(!is.na(!!sym(icol_name))) %>% pull(time) %>% tail(1)
   
   
   idat <- df.in %>%
     #filter(get(icol_name) > 0 & !is.na(get(icol_name))) %>%
-    complete(time = 2:max(df.in$time)) %>%
-    mutate_all(.funs = function(xx){ifelse(is.na(xx), 0, xx)}) %>%
-    arrange(time)
-  
+    complete(time = 2:max.obs.time) %>%
+    arrange(time) %>%
+    filter(time <= max.obs.time)
+  idat[icol_name] <- na_to_0(idat[icol_name])
+    #mutate(cleaned = ifelse(is.na(!!sym(icol_name)) & time <= max.obs.time, 0, !!sym(icol_name)))
 
   
   ts <- idat$time
@@ -216,7 +217,7 @@ get_cori <- function(df.in,
   te <- ts+(window-1)
   
   estimate_R(
-    incid = pull(idat, eval(icol_name)),
+    incid = pull(idat, !!icol_name),
     method = "uncertain_si",
     config = make_config(
       list(

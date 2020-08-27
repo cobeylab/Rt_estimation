@@ -42,16 +42,7 @@ GI_df <- get_sim_df() %>%
   merge(cori_wrapper_GI(-2), by = 'time') %>%
   merge(cori_wrapper_GI(-1), by = 'time') %>%
   merge(cori_wrapper_GI(1), by = 'time') %>%
-#   merge(cori_wrapper_GI(2), by = 'time') 
-# 
-# rtdf <- readRDS('cori_wt_fits_rt.rds') %>% as_tibble()
-# 
-# 
-# merge(GI_df, rtdf, by = c('time'), suffixes = c('GI', 'base')) %>% 
-#   pivot_longer(cols = contains('mean') | contains('true_rt')) %>%
-#   ggplot(aes(x = time)) + 
-#   geom_line(aes(y = value, color = name))
-
+   merge(cori_wrapper_GI(2), by = 'time')
 ```
 
 
@@ -100,6 +91,7 @@ GI_df %>%
   geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill =GI), alpha = .1) +
   ylab(expression(paste(R[t])))+
   labs(color = 'GI mean (d)', fill = 'GI mean (d)') +
+  ylim(c(0,ymax))+
   theme(legend.position = c(.75, .7)) -> gi_mean_plot
 
 
@@ -107,13 +99,16 @@ GI_df_cv %>%
   pivot_longer(contains('.'), names_to = c('var', '.value'), names_pattern = 'var_(\\d\\d?\\d?\\.\\d)\\.(\\w+)') %>%
   mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
   filter(time < 150) %>%
-  mutate(var = ifelse(var == '32.0', '32.0 (true value)', var))%>%
+  mutate(var = sprintf('%i', as.numeric(var))) %>%
+  mutate(var = ifelse(var == '32', '32 (true value)', var))%>%
+  mutate(var = factor(var, levels = c('8', '16', '32 (true value)', '64', '128'))) %>%
   ggplot()+
   geom_line(aes(x = time, y = true_rt), lwd = 1)+
   geom_line(aes(x = time, y = mean, color = var))+
   geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = var), alpha = .1) +
   ylab(expression(paste(R[t])))+
   labs(color = 'GI variance', fill = 'GI variance') +
+  ylim(c(0,ymax))+
   theme(legend.position = c(.75, .7)) -> gi_var_plot
 
 
