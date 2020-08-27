@@ -2,17 +2,12 @@
 
 Practical considerations for detecting changes in the effective reproductive number, Rt. 
 
-Code by Katie Gostic, Ed Baskerville and Lauren McGough. 
+Last updated 27-Aug-2020. 
 
-Last updated 18-June-2020. 
 
-## [Read the manuscript](https://github.com/cobeylab/Rt_estimation/blob/master/manuscript_18June2020.pdf)
-Click the above link to read the latest version of the manuscript. Contact kgostic@uchicago.edu with comments.
-
-We will post the medRxiv doi once it becomes available.
 
 ## [Code](https://github.com/cobeylab/Rt_estimation/tree/master/code)
-This directory contains functions and wrappers used to perform analyses:
+This directory contains functions and wrappers used to perform analyses and generate figures:
 
 * `simulation.R` - code to generate synthetic data using an SIR or SEIR-type model, deterministic or stochastic.
 * `funs_simulation-sweep.R` - wrapper functions for epidemic simulation.
@@ -28,8 +23,6 @@ This directory contains scripts and notebooks used to run analyses and generate 
 ### Workflow:
 
 * `01-simulate_data.R` - Specify inputs, generate synthetic data and save to a directory called `R0-xx/`.
-* `02-Analyze_synthetic_data.Rmd` - Annotated code performs the analyses and makes all plots shown in Fig. 2, 5 and 6, and appendix Fig. B.3. 
-* `02-make_Fig_2_appendix.Rmd` - Code performs analyses and generates Fig. B2, an alternate version of Fig. 2 in the main text, which compares the performance of Cori, Wallinga and Teunis, and Bettencourt and Ribeiro when the time series is truncated as Rt rises or falls.
-* `03-Make_Fig_4.Rmd` - Annotated code performs the analyses and makes all plots shown in Fig. 4.
-* `04-Make_Fig_deconvolution.Rmd` - Annotated code performs the analyses and makes the plot shown in the appendix, a tutorial on why deconvolution methods are needed.
+* `02-...` - Various notebooks estimate Rt from synthetic data and generate plots.
+* `Run_all_scripts.R` - Runs the entire workflow. Comments within indicate which notebooks generate which figures.
 

@@ -1,0 +1,39 @@
+---
+title: "Make Fig s1 - convolution"
+output: html_notebook
+---
+
+
+## Define a function to sample from an aribtrary delay distribution
+```{r}
+rdelay <- (function(nn) rgamma(nn, shape = 3, scale = 1))
+```
+
+```{r}
+NN <- 1000
+l1 <- expression(paste('A.     ', t[infection]))
+l2 <- expression(paste('B.     ', t[observation] == t[infection]+ u))
+l3 <- expression(paste('C.     ', t[infection] != t[infection] + u - u))
+l4 <- expression(paste('D.     ', t[infection] != t[infection] + u - 'E[u]'))
+## Start with 1000 hypothetical infections observed at time 100
+data_frame(`t infection` = rep(100, NN)) %>%
+        ## Impute times of observation for each of these 100 infections
+  mutate(`t obs` = `t infection` + rdelay(NN),
+         ## Impute back the times of infection from the imputed times of observation
+          `back-calculated t infection` = `t obs` - rdelay(NN),
+         `pan D` = `t obs` - mean(rdelay(10000))) %>%
+  pivot_longer(everything()) %>%
+  mutate(name = factor(name, levels = c('t infection', 't obs', 'back-calculated t infection', 'pan D'),
+                       labels = c(l1, l2, l3, l4))) %>%
+  group_by(name) %>%
+  mutate(mean = mean(value)) %>%
+  ggplot()+
+  geom_histogram(aes(x = value, fill = name), alpha = .9, binwidth = 1, show.legend = F)+
+  geom_vline(aes(xintercept = mean))+
+  xlim(c(94, 106))+
+  xlab('time')+
+  theme_bw()+
+  facet_wrap(name~., nrow = 2, labeller = label_parsed)
+gg_png(ww = 7*.8, hh = 6*.65, fn = 'figs/convolution.png', pp = last_plot())
+```
+

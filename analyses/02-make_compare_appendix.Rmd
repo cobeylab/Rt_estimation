@@ -1,0 +1,361 @@
+---
+title: "Make appendix version of Fig. 2"
+output: html_notebook
+---
+
+## Compare the accuracy of the three Rt estimation methods
+
+* THe main text figure truncates the time series after t = 150
+* Here we truncate at t = 67 to test what happens when the time series ends while Rt is still falling.
+```{r}
+## Preamble
+rm(list = ls())
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(cowplot)
+library(EpiEstim)
+theme_set(theme_bw())
+knitr::opts_chunk$set(message = FALSE)
+parlist <- read_rds('true_pars.rds')
+source('../code/util.R')
+if(!dir.exists('figs')){dir.create('figs')}
+```
+
+
+```{r}
+mt <- 67
+rtdf <- get_sim_df() %>% filter(time <= mt)
+```
+
+
+## Use the method of Cori et al. and of Wallinga & Teunis from EpiEstim to estimate Rt.
+```{r}
+wdw <- 1 ## Set smoothing window = 1d
+reset = TRUE ## If FALSE, read in cached file
+
+if(!file.exists('cori_wt_fits_rt_t65')|reset){ ## If generating new estimates...
+  plot_df_rt <- rtdf %>%
+    merge(get_cori(rtdf, icol_name = 'incidence', window = wdw), by = 'time') %>%     ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rtdf, icol_name = 'incidence', window = wdw), by = 'time')
+  
+  write_rds(plot_df_rt, path = 'cori_wt_fits_rt_t65')
+}else{ ## If reading saved file...
+  plot_df_rt <- readRDS('cori_wt_fits_rt_t65')
+}
+```
+
+## Get B & R fits, estimated using a model implemented in rstan.
+
+```{r message = FALSE}
+## wrapper function get_BR is defined in `util.R`.
+## stan model is defined in rtlive.stan, and wrappers are defined in rtlive.R
+BR_rt <- get_BR(rtdf, 'BR_real_time_test_t65', parlist, reset = FALSE)
+
+## Merge with WT and Cori estimates from above
+plot_rt <- merge(
+  plot_df_rt,
+  parse_fits(BR_rt, max.time = mt),
+  by = 'time', all = TRUE
+) %>%
+  pivot_longer(contains('.'), names_to = c("Fit_method", '.value'), names_sep = '\\.') ## Reformat for plotting
+```
+
+## Repeat truncation at time 67 + 1 generation interval
+
+```{r}
+rt_pls_gi <- get_sim_df() %>% filter(time <= mt+parlist$true_mean_GI)
+```
+
+
+## Use the method of Cori et al. and of Wallinga & Teunis from EpiEstim to estimate Rt.
+```{r}
+wdw <- 1 ## Set smoothing window = 1d
+reset = TRUE ## If FALSE, read in cached file
+
+if(!file.exists('cori_wt_fits_rt_t75.rds')|reset){ ## If generating new estimates...
+  plot_gi <- rt_pls_gi %>%
+    merge(get_cori(rt_pls_gi, icol_name = 'incidence', window = wdw), by = 'time') %>%     ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rt_pls_gi, icol_name = 'incidence', window = wdw), by = 'time')     ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+  write_rds(plot_gi, 'cori_wt_fits_rt_t75.rds')
+  }else{
+    plot_gi <- read_rds('cori_wt_fits_rt_t75.rds')
+  }
+```
+
+## Get B & R fits, estimated using a model implemented in rstan.
+
+```{r message = FALSE}
+## wrapper function get_BR is defined in `util.R`.
+## stan model is defined in rtlive.stan, and wrappers are defined in rtlive.R
+BR_rt <- get_BR(rt_pls_gi, 'BR_real_time_test_t65_gi', parlist, reset = TRUE)
+
+## Merge with WT and Cori estimates from above
+plot_gi <- merge(
+  plot_gi,
+  parse_fits(BR_rt, max.time = mt+parlist$true_mean_GI),
+  by = 'time', all = TRUE
+) %>%
+  pivot_longer(contains('.'), names_to = c("Fit_method", '.value'), names_sep = '\\.') ## Reformat for plotting
+```
+
+## Process for plotting
+```{r}
+ymin = 0; ymax =2.5 ## Set y limits (truncate CIs if they exceed these limits)
+plot_gi <- plot_gi %>%
+  filter(!is.na(mean) & time <= mt+parlist$true_mean_GI) %>%
+  filter(Fit_method != 'WT_symptom_onset') %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`),
+         `025` = ifelse(`025`<ymin, ymin, `025`)) %>%
+  mutate(facets = factor(Fit_method, levels = c('BR','Cori','WT_symptom_onset','WT'), labels = c('Bettencourt & Ribeiro', 'Cori et al.', 'Wallinga & Teunis', 'Wallinga & Teunis')))
+
+
+plot_rt <- plot_rt %>%
+  filter(!is.na(mean) & time <= mt+parlist$true_mean_GI) %>%
+  filter(Fit_method != 'WT_symptom_onset') %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`),
+         `025` = ifelse(`025`<ymin, ymin, `025`)) %>%
+  mutate(facets = factor(Fit_method, levels = c('BR','Cori','WT_symptom_onset','WT'), labels = c('Bettencourt & Ribeiro', 'Cori et al.', 'Wallinga & Teunis', 'Wallinga & Teunis')))
+```
+
+
+## Calculate the case reproductive number
+```{r}
+source('../code/caseR.R')
+beta_t <- with(get_sim_df(),
+               approxfun(x = time, y = true_r0/parlist$t_I))
+
+Rt_output <- with(parlist,
+                  integrate_Rt(beta_t, 
+                          sigma = 1/t_E, 
+                          gamma = 1/t_I, 
+                          N = N, 
+                          T = mt+parlist$true_mean_GI, 
+                          E0 = E_init, 
+                          I0 = I_init, 
+                          dt_int = .001)
+) 
+```
+
+Merge Rc with the data frame for plotting
+```{r}
+## Add to plotting data frame.
+plot_rt <- merge(Rt_output, plot_rt, by = 'time', all.y = TRUE)
+```
+
+
+
+## Plot Figure 2
+```{r}
+plot_rt %>%
+  ggplot() +
+ # geom_vline(aes(xintercept = 67), color = 'gray40')+
+#  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_line(data = plot_gi, aes(x = time, y = true_rt), lwd = 1) +
+  geom_line(aes(x = time, y = R_case), lty = 2)+
+  geom_point(aes(x = 67, y = tail(plot_gi$true_rt, 1)), fill = 'yellow', alpha = .5, pch = 23)+
+  geom_line(aes(x = time, y = mean), color = 'dodgerblue', alpha = .9) +
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`), fill = 'dodgerblue', alpha = 0.2)+
+  geom_line(data = plot_gi, aes(x = time, y = mean, color = 'orange'),alpha = .9) +
+  geom_ribbon(data = plot_gi, aes(x = time, ymin = `025`, ymax = `975`, fill = 'orange'), alpha = 0.2, lty = 2)+
+  xlab('time') +
+  ylab(expression(paste(R[t]))) +
+  xlab('Time')+
+  ylim(c(ymin, ymax))+
+  facet_wrap(.~facets) +
+  xlim(c(0, mt+parlist$true_mean_GI))+
+  #theme_minimal()+
+  theme(legend.position = 'none')+
+  labs(fill = 'Estimation method', color = "Estimation method")
+gg_png(ww=6, hh=2.5, 'figs/compare_appendixA.png')
+```
+
+
+## Make inset of time series
+```{r}
+  ggplot()+
+  geom_line(data = rt_pls_gi, aes(x = time, y = incidence), color = 'orange', alpha = .6)+
+  geom_line(data = plot_rt, aes(x = time, y = incidence), color = 'dodgerblue', alpha = .6)+
+  ylab(NULL)+
+  xlim(c(0, mt+parlist$true_mean_GI))+
+  theme_classic()
+gg_png(1.6, 1.5, 'figs/compare_appendixA_inset.png')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Estimate Rt in real time using three different methods, assuming observation to the end of the rise in Rt
+
+```{r}
+mt <- 97
+rtdf <- get_sim_df() %>% filter(time <= mt)
+```
+
+
+## Use the method of Cori et al. and of Wallinga & Teunis from EpiEstim to estimate Rt.
+```{r}
+wdw <- 1 ## Set smoothing window = 1d
+reset = TRUE ## If FALSE, read in cached file
+
+if(!file.exists('cori_wt_fits_rt_t97.rds')|reset){ ## If generating new estimates...
+  plot_df_rt <- rtdf %>%
+    merge(get_cori(rtdf, icol_name = 'incidence', window = wdw), by = 'time') %>%     ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rtdf, icol_name = 'incidence', window = wdw), by = 'time') %>%      ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+    merge(get_WT(rtdf, icol_name = 'obs_cases', outcol_name = 'WT_symptom_onset', window = wdw), by = 'time') %>%      ## Estimate using WT at E->I transition
+    select(time, true_rt, incidence, obs_cases, contains('Cori'), contains('WT')) 
+  
+  write_rds(plot_df_rt, path = 'cori_wt_fits_rt_t97.rds')
+}else{ ## If reading saved file...
+  plot_df_rt <- readRDS('cori_wt_fits_rt_t97.rds')
+}
+```
+
+## Get B & R fits, estimated using a model implemented in rstan.
+
+```{r message = FALSE}
+## wrapper function get_BR is defined in `util.R`.
+## stan model is defined in rtlive.stan, and wrappers are defined in rtlive.R
+BR_rt <- get_BR(rtdf, 'BR_real_time_test_t97', parlist, reset = TRUE)
+
+## Merge with WT and Cori estimates from above
+plot_rt <- merge(
+  plot_df_rt,
+  parse_fits(BR_rt, max.time = mt),
+  by = 'time', all = TRUE
+) %>%
+  pivot_longer(contains('.'), names_to = c("Fit_method", '.value'), names_sep = '\\.') ## Reformat for plotting
+```
+
+## Repeat for mt + 1 generation interval
+
+```{r}
+rt_pls_gi <- get_sim_df() %>% filter(time <= mt+parlist$true_mean_GI)
+```
+
+
+## Use the method of Cori et al. and of Wallinga & Teunis from EpiEstim to estimate Rt.
+```{r}
+reset = TRUE
+if(!file.exists('cori_wt_fits_rt_t105.rds')|reset){ ## If generating new estimates...
+  plot_gi <- rt_pls_gi %>%
+    merge(get_cori(rt_pls_gi, icol_name = 'incidence', window = wdw), by = 'time') %>%     ## Estimate using Cori et al. Function get_cori is defined in `util.R`
+    merge(get_WT(rt_pls_gi, icol_name = 'incidence', window = wdw), by = 'time') %>%      ## Estimate using WT. Function get_WT is defined in `util.R` -- Note, this takes several minutes to generate CIs.
+    merge(get_WT(rt_pls_gi, icol_name = 'obs_cases', outcol_name = 'WT_symptom_onset', window = wdw), by = 'time') %>%      ## Estimate using WT at E->I transition
+    select(time, true_rt, incidence, obs_cases, contains('Cori'), contains('WT')) 
+    write_rds(plot_gi, path = 'cori_wt_fits_rt_t105.rds')
+}else{ ## If reading saved file...
+  plot_gi <- readRDS('cori_wt_fits_rt_t105.rds')
+}
+```
+
+## Get B & R fits, estimated using a model implemented in rstan.
+
+```{r message = FALSE}
+## wrapper function get_BR is defined in `util.R`.
+## stan model is defined in rtlive.stan, and wrappers are defined in rtlive.R
+BR_rt <- get_BR(rt_pls_gi, 'BR_real_time_test_t105_gi', parlist, reset = TRUE)
+
+## Merge with WT and Cori estimates from above
+plot_gi <- merge(
+  plot_gi,
+  parse_fits(BR_rt, max.time = mt+parlist$true_mean_GI),
+  by = 'time', all = TRUE
+) %>%
+  pivot_longer(contains('.'), names_to = c("Fit_method", '.value'), names_sep = '\\.') ## Reformat for plotting
+```
+
+## Process for plotting
+```{r}
+plot_gi <- plot_gi %>%
+  filter(!is.na(mean) & time <= mt+parlist$true_mean_GI) %>%
+  filter(Fit_method != 'WT_symptom_onset') %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`),
+         `025` = ifelse(`025`<ymin, ymin, `025`)) %>%
+  mutate(facets = factor(Fit_method, levels = c('BR','Cori','WT_symptom_onset','WT'), labels = c('Bettencourt & Ribeiro', 'Cori et al.', 'Wallinga & Teunis', 'Wallinga & Teunis')))
+
+
+plot_rt <- plot_rt %>%
+  filter(!is.na(mean) & time <= mt+parlist$true_mean_GI) %>%
+  filter(Fit_method != 'WT_symptom_onset') %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`),
+         `025` = ifelse(`025`<ymin, ymin, `025`)) %>%
+  mutate(facets = factor(Fit_method, levels = c('BR','Cori','WT_symptom_onset','WT'), labels = c('Bettencourt & Ribeiro', 'Cori et al.', 'Wallinga & Teunis', 'Wallinga & Teunis')))
+```
+
+
+## Calculate the case reproductive number
+```{r}
+source('../code/caseR.R')
+beta_t <- with(get_sim_df(),
+               approxfun(x = time, y = true_r0/parlist$t_I))
+
+Rt_output <- with(parlist,
+                  integrate_Rt(beta_t, 
+                          sigma = 1/t_E, 
+                          gamma = 1/t_I, 
+                          N = N, 
+                          T = mt+parlist$true_mean_GI, 
+                          E0 = E_init, 
+                          I0 = I_init, 
+                          dt_int = .001)
+) 
+```
+
+Merge Rc with the data frame for plotting
+```{r}
+## Add to plotting data frame.
+plot_rt <- merge(Rt_output, plot_rt, by = 'time', all.y = TRUE)
+```
+
+
+
+
+## Plot Figure 2
+```{r}
+ymin = 0; ymax =2.5 ## Set y limits (truncate CIs if they exceed these limits)
+plot_rt %>%
+ggplot() +
+ # geom_vline(aes(xintercept = 67), color = 'gray40')+
+#  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_line(data = plot_gi, aes(x = time, y = true_rt), lwd = 1) +
+  geom_line(aes(x = time, y = R_case), lty = 2)+
+  geom_point(aes(x = 97, y = tail(plot_gi$true_rt, 1)), fill = 'yellow', alpha = .5, pch = 23)+
+  geom_line(aes(x = time, y = mean), color = 'dodgerblue', alpha = .9) +
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`), fill = 'dodgerblue', alpha = 0.2)+
+  geom_line(data = plot_gi, aes(x = time, y = mean, color = 'orange'),alpha = .9) +
+  geom_ribbon(data = plot_gi, aes(x = time, ymin = `025`, ymax = `975`, fill = 'orange'), alpha = 0.2, lty = 2)+
+  xlab('time') +
+  ylab(expression(paste(R[t]))) +
+  xlab('Time')+
+  ylim(c(ymin, ymax))+
+  facet_wrap(.~facets) +
+  xlim(c(0, mt+parlist$true_mean_GI))+
+  #theme_minimal()+
+  theme(legend.position = 'none')+
+  labs(fill = 'Estimation method', color = "Estimation method")
+gg_png(ww=6, hh=2.5, 'figs/compare_appendix_B.png')
+```
+
+
+## Make inset of time series
+```{r}
+  ggplot()+
+  geom_line(data = rt_pls_gi, aes(x = time, y = incidence), color = 'orange', alpha = .6)+
+  geom_line(data = plot_rt, aes(x = time, y = incidence), color = 'dodgerblue', alpha = .6)+
+  ylab(NULL)+
+  xlim(c(0, mt+parlist$true_mean_GI))+
+  theme_classic()
+gg_png(1.6, 1.5, 'figs/compare_appendixB_inset.png')
+```
+

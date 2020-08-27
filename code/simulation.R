@@ -10,16 +10,15 @@ check_args <- function(
 ) {
   # Check all input parameters
   stopifnot(is.wholenumber(N) && length(N) == 1 && N >= 1)
-  stopifnot(length(n_t) == 1 && n_t >= 1)
-  if(!is.wholenumber(n_t)){warning('n_t is not a whole number')}
+  stopifnot(is.wholenumber(n_t) && length(n_t) == 1 && n_t >= 1)
   stopifnot(
     is.wholenumber(n_steps_per_t) && length(n_steps_per_t) == 1 &&
       n_steps_per_t >= 1
   )
   stopifnot(
-    is.numeric(arnaught) && arnaught > 0 && 
+    is.numeric(arnaught) && arnaught > 0 &&
       (length(arnaught) == 1 || length(arnaught) == n_t + 1)
-      )
+  )
   stopifnot(
     is.numeric(t_E) && length(t_E) == 1 && t_E >= 0
   )
@@ -210,7 +209,7 @@ simulate_seir_ode <- function(
   arnaught, t_E, t_I,
   N, S_init, E_init, I_init,
   n_t,
-  n_steps_per_t = 1 # Number of timsteps to output per day
+  n_steps_per_t = 1 # Ignored; included so the function signature matches stochastic version
 ) {
   library(deSolve)
   
@@ -257,18 +256,11 @@ simulate_seir_ode <- function(
     cum_dEI = 0
   )
   #automatic ode solver is lsoda, an "automatic stiff/non-stiff solver"
-  as.data.frame(ode(y_init, seq(0, n_t, by = 1/n_steps_per_t), d_dt, NULL)) %>%
-      mutate(dS = cum_dS - lag(cum_dS, 1)) %>%
-      mutate(dEI = cum_dEI - lag(cum_dEI, 1)) %>%
-      mutate(dIR = R - lag(R, 1))
+  as.data.frame(ode(y_init, 0:n_t, d_dt, NULL)) %>%
+    mutate(dS = cum_dS - lag(cum_dS, 1)) %>%
+    mutate(dEI = cum_dEI - lag(cum_dEI, 1)) %>%
+    mutate(dIR = R - lag(R, 1))
 }
-
-simulate_seir_ode(arnaught = 2.0, t_E = 4, t_I = 4, N = 100000, S_init = 100000-10, E_init = 10, I_init = 0, n_t = 100)
-
-
-
-
-
 
 
 

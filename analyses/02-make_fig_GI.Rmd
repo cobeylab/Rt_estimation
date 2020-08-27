@@ -1,0 +1,123 @@
+---
+title: "Compare Cori et al., Wallinga & Teunis and Bettencourt & Ribeiro methods"
+output: html_notebook
+---
+
+
+```{r}
+## Preamble
+rm(list = ls())
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(cowplot)
+library(EpiEstim)
+theme_set(theme_bw())
+knitr::opts_chunk$set(message = FALSE)
+parlist <- read_rds('true_pars.rds')
+source('../code/util.R')
+if(!dir.exists('figs')){dir.create('figs')}
+```
+
+
+
+## Cori: compare generation intervals
+
+Vary the mean generation interval
+```{r}
+wdw <- 1 ## Set smoothing window = 1d
+cori_wrapper_GI <- function(GI_offset){
+  GI <- parlist$true_mean_GI+GI_offset
+  get_cori(get_sim_df() %>% filter(time < 150), 
+           icol_name = 'incidence', 
+           out_name = sprintf('GI_%.1f', GI), 
+           window = wdw, 
+           GI_mean = GI) %>% as_tibble()
+}
+
+GI_df <- get_sim_df() %>%
+  ## Merge with true GI fit
+  merge(cori_wrapper_GI(0) , by = 'time') %>%
+  merge(cori_wrapper_GI(-2), by = 'time') %>%
+  merge(cori_wrapper_GI(-1), by = 'time') %>%
+  merge(cori_wrapper_GI(1), by = 'time') %>%
+   merge(cori_wrapper_GI(2), by = 'time')
+```
+
+
+Vary the cv of the generation interval
+```{r}
+wdw <- 1 ## Set smoothing window = 1d
+cori_wrapper_GI_cv <- function(k){
+  shape = 1/k
+  scale = parlist$true_mean_GI*k
+  mm = shape*scale
+  vv = shape*scale^2
+  
+  
+  get_cori(get_sim_df() %>% filter(time <= 150), 
+           icol_name = 'incidence', 
+           out_name = sprintf('var_%.1f', vv), 
+           window = wdw, 
+           GI_mean = mm, 
+           GI_var = vv)
+}
+
+GI_df_cv <- get_sim_df() %>% filter(time <= 150) %>%
+  ## Merge with true GI fit
+  merge( cori_wrapper_GI_cv(1/8) , by = 'time') %>%
+  merge(cori_wrapper_GI_cv(1/4), by = 'time') %>%
+  merge(cori_wrapper_GI_cv(1/2), by = 'time') %>%
+  merge(cori_wrapper_GI_cv(1), by = 'time') %>%
+  merge(cori_wrapper_GI_cv(2), by = 'time') 
+
+```
+
+
+
+```{r}
+ymax = 3
+GI_df %>%
+  pivot_longer(contains('.'), names_to = c('GI', '.value'), names_pattern = 'GI_(\\d\\d?\\.\\d)\\.(\\w+)') %>%
+  mutate(GI = as.numeric(GI)) %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
+  filter(time < 150) %>%
+  mutate(GI = ifelse(GI == 8, '8 (true value)', GI)) %>%
+  mutate(GI = factor(GI, levels = c('6', '7', '8 (true value)', '9', '10'))) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_line(aes(x = time, y = mean, color = GI))+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill =GI), alpha = .1) +
+  ylab(expression(paste(R[t])))+
+  labs(color = 'GI mean (d)', fill = 'GI mean (d)') +
+  ylim(c(0,ymax))+
+  theme(legend.position = c(.75, .7)) -> gi_mean_plot
+
+
+GI_df_cv %>%
+  pivot_longer(contains('.'), names_to = c('var', '.value'), names_pattern = 'var_(\\d\\d?\\d?\\.\\d)\\.(\\w+)') %>%
+  mutate(`975` = ifelse(`975`>ymax, ymax, `975`)) %>%
+  filter(time < 150) %>%
+  mutate(var = sprintf('%i', as.numeric(var))) %>%
+  mutate(var = ifelse(var == '32', '32 (true value)', var))%>%
+  mutate(var = factor(var, levels = c('8', '16', '32 (true value)', '64', '128'))) %>%
+  ggplot()+
+  geom_line(aes(x = time, y = true_rt), lwd = 1)+
+  geom_line(aes(x = time, y = mean, color = var))+
+  geom_ribbon(aes(x = time, ymin = `025`, ymax = `975`, fill = var), alpha = .1) +
+  ylab(expression(paste(R[t])))+
+  labs(color = 'GI variance', fill = 'GI variance') +
+  ylim(c(0,ymax))+
+  theme(legend.position = c(.75, .7)) -> gi_var_plot
+
+
+cowplot::plot_grid(gi_mean_plot, 
+                   gi_var_plot,
+                   labels = c('A', 'B'))
+gg_png(7, 3.5, 'figs/gen_interval.png')
+```
+
+
+
+
