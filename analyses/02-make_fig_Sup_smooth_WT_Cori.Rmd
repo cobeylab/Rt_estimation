@@ -32,7 +32,7 @@ rtdf <- get_sim_df() %>% filter(time <= mt)
 ## Generate fits
 ```{r}
 
-reset = FALSE ## If FALSE, read in cached file
+reset = TRUE ## If FALSE, read in cached file
 
 if(!file.exists('smoothed.rds')|reset){ ## If generating new estimates...
   plot_smoothed <- rtdf %>%
@@ -115,6 +115,7 @@ plot_smoothed %>%
 gg_png(ww = 5.5, hh = 4, 'figs/Fig_exact_rt_rc.png')
 ```
 
+## Plot exact vs estimate
 
 ```{r}
 plot_smoothed %>%
