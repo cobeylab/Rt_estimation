@@ -10,18 +10,6 @@
 ## --------- Outputs
 #' @value - the function returns a data frame with columns time and out_col_name (which gives the imputed number of infections per timestep)
 
-# # # For testing/debugging
-# obs_df <- obs_df %>%
-#   complete(time = 0:max(time)) %>%
-#   filter(time <= 150)
-# times <- obs_df$time
-# observed <- obs_df$imputed_outpatient
-# p_delay <- hist(outpatient_delay_dist(10000),
-#                 plot = FALSE, breaks = 0:(max(times)+1)
-# )$density
-# max_iter = 5
-# out_col_name = 'test'
-# right_censor = TRUE
 
 
 get_RL <- function(observed, ## Vector of observed cases. Let L = length(observed)
@@ -29,9 +17,8 @@ get_RL <- function(observed, ## Vector of observed cases. Let L = length(observe
                    p_delay,  ## Vector of probabilities that the delay from infection to observation is 0, 1, ... days. Can be any length <= L.
                    max_iter = 50,
                    out_col_name = 'RL_result',
-                   right_censor = TRUE,
-                   verbose = TRUE,
-                   ww = 0){
+                   right_censor = TRUE, # If TRUE, upscale the observations at the end of the time series based on the cumulative probability that an infection occurring on that date would have been observed.
+                   verbose = TRUE){
   
   ## Check inputs
   stopifnot(is.vector(observed) & is.vector(times) & is.vector(p_delay))
@@ -103,26 +90,15 @@ get_RL <- function(observed, ## Vector of observed cases. Let L = length(observe
   
   ## Set an intial value for the expected vector
   expected_D <- sapply(1:(length(lambda)), get_expected_D_i, lambda = lambda, p_delay = p_delay)
-  ## Iterate to solve for lambda
+  ## Iterate to solve for lambda (the inferred time series of infections)
   iter = 1
   while(get_chisq(observed, expected_D) > 1 & iter < max_iter){
     expected_D <- sapply(1:(length(lambda)), get_expected_D_i, lambda = lambda, p_delay = p_delay)
-    lambda_unsmoothed <- sapply(1:(length(lambda)), get_lambda_j_update,
+    lambda <- sapply(1:(length(lambda)), get_lambda_j_update,
                      lambda = lambda, 
                      p_delay = p_delay, 
                      obs = observed, 
                      expected = expected_D)
-    lambda = lambda_unsmoothed
-    if(ww>0){
-    wts = choose(ww, 0:ww)/(2^ww)
-    #lambda = lambda_unsmoothed = rnorm(100)
-    for(ii in (ww/2+1):(length(lambda)-ww/2-1)){
-      inds <- max(1, ii-ww/2):min(length(lambda_unsmoothed), ii+ww/2)
-      lambda[ii] = sum(lambda_unsmoothed[inds]*wts)
-    }
-    }
-    #plot(lambda_unsmoothed)
-    #points(lambda, col = 'red')
     iter = iter+1
   }
   ## Clean
