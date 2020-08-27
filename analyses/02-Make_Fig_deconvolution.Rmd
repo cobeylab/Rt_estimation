@@ -17,9 +17,9 @@ l3 <- expression(paste('C.     ', t[infection] != t[infection] + u - u))
 l4 <- expression(paste('D.     ', t[infection] != t[infection] + u - 'E[u]'))
 ## Start with 1000 hypothetical infections observed at time 100
 data_frame(`t infection` = rep(100, NN)) %>%
-        ## Impute times of observation for each of these 100 infections
+        ## Simulate times of observation for each of these 100 infections
   mutate(`t obs` = `t infection` + rdelay(NN),
-         ## Impute back the times of infection from the imputed times of observation
+         ## Infer back the times of infection from the synthetic times of observation
           `back-calculated t infection` = `t obs` - rdelay(NN),
          `pan D` = `t obs` - mean(rdelay(10000))) %>%
   pivot_longer(everything()) %>%
@@ -34,6 +34,6 @@ data_frame(`t infection` = rep(100, NN)) %>%
   xlab('time')+
   theme_bw()+
   facet_wrap(name~., nrow = 2, labeller = label_parsed)
-gg_png(ww = 7*.8, hh = 6*.65, fn = 'figs/convolution.png', pp = last_plot())
+gg_png(ww = 7*.8, hh = 6*.65, fn = 'figs/supp_convolution.png', pp = last_plot())
 ```
 
