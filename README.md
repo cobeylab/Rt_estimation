@@ -16,6 +16,7 @@ This directory contains functions and wrappers used to perform analyses and gene
 * `util.R` - various utility functions, including wrappers to estimate Rt using the methods of [Cori et al.](https://academic.oup.com/aje/article/178/9/1505/89262), [Wallinga & Teunis](https://academic.oup.com/aje/article/160/6/509/79472), and using methods adapted from [Bettencourt & Ribeiro](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0002185) by [rt.live](https://rt.live). The first two methods are implemented in the package [EpiEstim](https://CRAN.R-project.org/package=EpiEstim). The final method uses the rstan implementation above.
 * `caseR.R` - Functions to calculate the exact case reproductive number within the synthetic data (dashed black lines shown in Fig. 2 and Fig. B.2).
 * `Rc_math.Rmd` - Notes on the math used to calculate the case reproductive number exactly.
+* `Richardson_Lucy.R` - Performs deconvolution.
 
 ## [Analyses](https://github.com/cobeylab/Rt_estimation/tree/master/analyses)
 This directory contains scripts and notebooks used to run analyses and generate figures:
